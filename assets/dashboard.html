@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="refresh" content="2">
+<title>CUDA 13 双卡 Deface 进度</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#0d1117;color:#c9d1d9;padding:24px;max-width:900px;margin:0 auto}
+h1{text-align:center;color:#58a6ff;margin-bottom:6px;font-size:22px}
+.sub{text-align:center;color:#8b949e;margin-bottom:20px;font-size:12px}
+
+.overall{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px;margin-bottom:16px}
+.overall .row{display:flex;justify-content:space-between;margin-bottom:6px;font-size:14px}
+.overall .bar{height:32px;background:#21262d;border-radius:16px;overflow:hidden;margin-top:10px}
+.overall .bar div{height:100%;background:linear-gradient(90deg,#1f6feb,#58a6ff);border-radius:16px;
+  transition:width .3s;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:13px;color:#fff}
+
+.current{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px;margin-bottom:16px}
+.current .title{font-size:15px;color:#d2991d;margin-bottom:10px}
+.current .info{font-size:13px;color:#8b949e;margin-bottom:6px}
+
+.gpus{display:flex;gap:12px;margin-top:12px}
+.gpu{flex:1;background:#21262d;border-radius:10px;padding:14px}
+.gpu .label{font-size:12px;color:#3fb950;margin-bottom:6px}
+.gpu .pbar{height:14px;background:#30363d;border-radius:7px;overflow:hidden}
+.gpu .pbar div{height:100%;background:linear-gradient(90deg,#238636,#3fb950);border-radius:7px;transition:width .3s}
+.gpu .txt{font-size:11px;color:#8b949e;margin-top:4px}
+
+.stats{display:flex;gap:10px;margin-bottom:16px}
+.stat{flex:1;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;text-align:center}
+.stat .val{font-size:28px;font-weight:bold;color:#58a6ff}
+.stat .lbl{font-size:11px;color:#8b949e;margin-top:4px}
+
+.history{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px}
+.history .title{font-size:15px;color:#58a6ff;margin-bottom:10px}
+.history table{width:100%;border-collapse:collapse;font-size:12px}
+.history th{text-align:left;color:#8b949e;padding:5px 8px;border-bottom:1px solid #21262d}
+.history td{padding:5px 8px;border-bottom:1px solid #161b22}
+.ok{color:#3fb950}.err{color:#f85149}
+
+.eta{font-size:20px;color:#58a6ff;font-weight:bold}
+.running{color:#d2991d;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:0.4}}
+.empty{text-align:center;color:#484f58;padding:30px;font-size:16px}
+.footer{text-align:center;color:#484f58;font-size:11px;margin-top:16px}
+</style>
+</head>
+<body>
+
+<h1>CUDA 13 Dual GPU Deface</h1>
+<div class="sub" id="pipeline">onnxruntime-gpu 1.27.0 · CUDA 13.0 · cuDNN 9.24 · 2×RTX4090 · NVENC</div>
+
+<div class="stats">
+  <div class="stat"><div class="val" id="st_completed">0</div><div class="lbl">已完成</div></div>
+  <div class="stat"><div class="val" id="st_total">0</div><div class="lbl">总计</div></div>
+  <div class="stat"><div class="val" id="st_errors">0</div><div class="lbl">错误</div></div>
+  <div class="stat"><div class="val" id="st_eta">--</div><div class="lbl">预计剩余</div></div>
+</div>
+
+<div class="overall">
+  <div class="row"><span>📊 总进度</span><span id="done_count">等待开始...</span></div>
+  <div class="bar"><div id="overall_bar" style="width:0%">0%</div></div>
+  <div class="row" style="margin-top:8px"><span>⏱ <span id="elapsed">--</span></span><span id="perf_info"></span></div>
+</div>
+
+<div class="current">
+  <div class="title">⚙ 正在处理</div>
+  <div class="info" id="current_file">等待开始...</div>
+  <div class="info" id="current_stage"></div>
+  <div class="gpus">
+    <div class="gpu">
+      <div class="label">🟢 GPU 0 (CUDA 13)</div>
+      <div class="pbar"><div id="gpu0_bar" style="width:0%"></div></div>
+      <div class="txt" id="gpu0_txt">--</div>
+    </div>
+    <div class="gpu">
+      <div class="label">🟢 GPU 1 (CUDA 13)</div>
+      <div class="pbar"><div id="gpu1_bar" style="width:0%"></div></div>
+      <div class="txt" id="gpu1_txt">--</div>
+    </div>
+  </div>
+</div>
+
+<div class="history">
+  <div class="title">📜 最近完成</div>
+  <table id="history_table">
+    <tr><th>文件</th><th>耗时</th><th>大小</th><th>状态</th></tr>
+  </table>
+</div>
+
+<div class="footer">自动刷新中 · 每 2 秒 · CUDA 13 Native + cuDNN 9.24 + TensorRT Ready</div>
+
+<script>
+async function refresh() {
+  try {
+    const r = await fetch('status.json?' + Date.now());
+    const d = await r.json();
+    render(d);
+  } catch(e) {}
+}
+function render(d) {
+  document.getElementById('pipeline').textContent = d.pipeline || 'CUDA 13 Dual GPU Deface';
+
+  let pct = d.total ? Math.round(d.completed / d.total * 100) : 0;
+  document.getElementById('st_completed').textContent = d.completed || 0;
+  document.getElementById('st_total').textContent = d.total || 0;
+  document.getElementById('st_errors').textContent = d.errors || 0;
+
+  document.getElementById('overall_bar').style.width = pct + '%';
+  document.getElementById('overall_bar').textContent = pct + '% (' + (d.completed||0) + '/' + (d.total||0) + ')';
+  document.getElementById('done_count').textContent = '✅ ' + (d.completed||0) + ' / ' + (d.total||0) + ' | ❌ ' + (d.errors||0);
+  document.getElementById('elapsed').textContent = d.elapsed || '--';
+
+  // ETA
+  let cur = d.current;
+  if (cur && cur.file) {
+    document.getElementById('current_file').innerHTML = '<span class="running">●</span> ' + cur.file;
+    document.getElementById('current_stage').textContent = '阶段: ' + (cur.stage || '处理中');
+    document.getElementById('gpu0_bar').style.width = (cur.gpu0 || 0) + '%';
+    document.getElementById('gpu1_bar').style.width = (cur.gpu1 || 0) + '%';
+    document.getElementById('gpu0_txt').textContent = (cur.gpu0 || 0) + '%';
+    document.getElementById('gpu1_txt').textContent = (cur.gpu1 || 0) + '%';
+    document.getElementById('st_eta').textContent = '...';
+  } else if (!d.running && d.total && d.completed >= d.total) {
+    document.getElementById('current_file').innerHTML = '<span style="color:#3fb950">✅ 全部完成!</span>';
+    document.getElementById('current_stage').textContent = '';
+    document.getElementById('gpu0_bar').style.width = '100%';
+    document.getElementById('gpu1_bar').style.width = '100%';
+    document.getElementById('st_eta').textContent = '完成';
+  } else {
+    document.getElementById('st_eta').textContent = d.running ? '等待中' : '--';
+  }
+
+  // Performance info
+  if (d.perf) {
+    document.getElementById('perf_info').textContent = '🚀 ' + d.perf;
+  }
+
+  // History
+  if (d.history && d.history.length > 0) {
+    let tbody = document.getElementById('history_table');
+    tbody.innerHTML = '<tr><th>文件</th><th>耗时</th><th>大小</th><th>状态</th></tr>';
+    for (let h of d.history.slice(-12).reverse()) {
+      tbody.innerHTML += '<tr>' +
+        '<td>' + (h.file || '--') + '</td>' +
+        '<td>' + (h.time ? Math.round(h.time) + 's' : '--') + '</td>' +
+        '<td>' + (h.size_mb ? Math.round(h.size_mb) + 'MB' : '--') + '</td>' +
+        '<td class="' + (h.status === 'OK' ? 'ok' : 'err') + '">' + (h.status || '--') + '</td>' +
+        '</tr>';
+    }
+  }
+
+  document.title = pct + '% · CUDA 13 Deface';
+}
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
