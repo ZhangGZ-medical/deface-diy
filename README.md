@@ -10,7 +10,6 @@
 - 🔄 自动 MTS/AVI/MOV/MKV → MP4 转封装
 - ⚡ 双 RTX 4090 CUDA 13 分片并行处理
 - 🎬 NVENC 硬件编码加速
-- 📊 实时进度看板（HTML Dashboard）
 - 📁 单视频 / 批量文件夹两种模式
 
 ## 性能
@@ -42,9 +41,6 @@ D:\face_anon_env\Scripts\python scripts/deface_single.py video.MTS
 # 3. 批量文件夹处理
 D:\face_anon_env\Scripts\python scripts/deface_batch.py D:\videos
 
-# 4. 进度看板
-D:\face_anon_env\Scripts\python -m http.server 8765
-# 浏览器打开 http://localhost:8765/assets/dashboard.html
 ```
 
 ## 文件结构
@@ -57,11 +53,9 @@ deface-diy/
 │   ├── audit_env.py               # 环境审查（GPU/CUDA/cuDNN/ort/deface/FFmpeg）
 │   ├── deface_single.py           # 单视频双卡处理
 │   └── deface_batch.py            # 批量文件夹双卡处理
-├── references/
-│   ├── cuda13_install.md          # CUDA 13 + cuDNN 9 安装指南
-│   └── troubleshooting.md         # 常见问题排错
-└── assets/
-    └── dashboard.html             # 实时进度看板
+└── references/
+    ├── cuda13_install.md          # CUDA 13 + cuDNN 9 安装指南
+    └── troubleshooting.md         # 常见问题排错
 ```
 
 ## 安全
