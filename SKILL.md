@@ -53,26 +53,7 @@ D:\face_anon_env\Scripts\python scripts/deface_batch.py <目录1> [目录2 ...]
 行为：
 - 递归扫描所有视频文件
 - 逐个按双卡管道处理
-- 实时写入 `status.json` 供看板读取
 - 完成后输出统计摘要
-
-### 第四层：进度看板（可选）
-
-启动 HTTP 看板服务：
-
-```bash
-# 在 deface_batch.py 运行时，另开终端：
-cd <skill-directory>/..
-D:\face_anon_env\Scripts\python -m http.server 8765
-# 然后打开 http://localhost:8765/dashboard.html
-```
-
-看板 HTML 文件在 `assets/dashboard.html`，从 status.json 读取数据。
-每 2 秒自动刷新，显示：
-- 总体进度条和统计
-- 当前视频双卡实时进度
-- 最近完成的文件列表
-- 预计剩余时间
 
 ## 技术栈
 
@@ -106,7 +87,7 @@ D:\face_anon_env\Scripts\python -m http.server 8765
 
 ### scripts/deface_batch.py
 批量双卡处理脚本。接受目录参数或使用默认目录。
-递归扫描所有视频格式，逐个双卡处理，实时状态回写 status.json。
+递归扫描所有视频格式，逐个双卡处理。
 
 ### references/cuda13_install.md
 完整的 CUDA 13.0 + cuDNN 9.24 + onnxruntime-gpu 1.27.0 安装步骤。
@@ -138,7 +119,6 @@ imageio-ffmpeg>=0.4
 - 执行 ffmpeg 命令行（转封装、分片、合并）
 - 执行 deface CLI（人脸检测 + 模糊）
 - 调用 onnxruntime GPU 推理
-- 写入 status.json 文件（进度状态）
 - 调用 subprocess.Popen 管理子进程
 
 **不做的事情**：
