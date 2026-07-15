@@ -4,12 +4,11 @@ Dual RTX 4090 + CUDA 13 native + NVENC deface batch processor
 =============================================================
 Optimized pipeline:
   1. Scan target dir(s) for video files (mp4/mts/avi/mov/mkv/...)
-  2. Auto-convert non-MP4 → MP4 (stream copy, or re-encode fallback)
+  2. Auto-convert non-MP4 -> MP4 (stream copy, or re-encode fallback)
   3. Split each video into 2 halves
   4. Run deface on both halves in parallel (CUDA EP on GPU0 + GPU1)
   5. Merge anonymized halves back into single MP4
   6. Clean up temp files
-  7. Update status.json for dashboard
 
 Requires:
   - D:\\face_anon_env (Python venv with deface + onnxruntime-gpu)
@@ -23,11 +22,9 @@ Usage:
   python deface_batch.py D:\\workspace\\face\\phase1_video D:\\145videodata
 """
 
-import os, sys, json, time, subprocess, glob as glob_mod
+import os, sys, time, subprocess, glob as glob_mod
 from pathlib import Path
-from datetime import timedelta, datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
+from datetime import timedelta
 
 
 # ============= Configuration =============
@@ -36,34 +33,24 @@ DEFACE_CMD = r"D:\face_anon_env\Scripts\deface"
 FFMPEG_CFG = '{"codec":"h264_nvenc"}'
 BACKEND = "onnxrt"
 EP = "CUDAExecutionProvider"
-STATUS_FILE = r"D:\workspace\2026-07-15-08-29-49\status.json"
 VIDEO_EXTENSIONS = {".mp4", ".mts", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".ts"}
-
-_env_setup_done = False
-_env_lock = threading.Lock()
 
 
 def setup_env():
     """Ensure CUDA 13 DLLs are findable"""
-    global _env_setup_done
-    with _env_lock:
-        if _env_setup_done:
-            return
-        cuda_base = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0"
-        for sub in ["bin", "bin\\x64"]:
-            d = os.path.join(cuda_base, sub)
-            if os.path.isdir(d):
-                try:
-                    os.add_dll_directory(d)
-                except (AttributeError, OSError):
-                    pass
-        # Also add to PATH for subprocess
-        path_add = os.pathsep.join([
-            os.path.join(cuda_base, "bin"),
-            os.path.join(cuda_base, "bin", "x64"),
-        ])
-        os.environ["PATH"] = path_add + os.pathsep + os.environ.get("PATH", "")
-        _env_setup_done = True
+    cuda_base = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0"
+    for sub in ["bin", "bin\\x64"]:
+        d = os.path.join(cuda_base, sub)
+        if os.path.isdir(d):
+            try:
+                os.add_dll_directory(d)
+            except (AttributeError, OSError):
+                pass
+    path_add = os.pathsep.join([
+        os.path.join(cuda_base, "bin"),
+        os.path.join(cuda_base, "bin", "x64"),
+    ])
+    os.environ["PATH"] = path_add + os.pathsep + os.environ.get("PATH", "")
 
 
 def scan_videos(root_dir):
@@ -95,17 +82,15 @@ def to_mp4(src):
     dst = os.path.splitext(src)[0] + ".mp4"
     if os.path.exists(dst):
         return dst
-    # Stream copy
     r = subprocess.run(
         ["ffmpeg", "-y", "-i", src, "-c", "copy", "-map", "0:v", "-map", "0:a?", dst],
-        capture_output=True, text=True, timeout=180
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=180
     )
     if r.returncode != 0:
-        # Re-encode fallback
         subprocess.run(
             ["ffmpeg", "-y", "-i", src, "-c:v", "libx264", "-c:a", "aac",
              "-preset", "fast", dst],
-            capture_output=True, text=True, timeout=300
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=300
         )
     return dst
 
@@ -114,25 +99,23 @@ def split_video(mp4_path, out_dir):
     """Split video into 2 halves for dual GPU"""
     dur = get_duration(mp4_path)
     if dur <= 2:
-        # Very short: duplicate to both slots
         base = os.path.splitext(os.path.basename(mp4_path))[0]
         p1 = os.path.join(out_dir, f"{base}_p1.mp4")
         subprocess.run(["ffmpeg", "-y", "-i", mp4_path, "-c", "copy", p1],
-                       capture_output=True, timeout=60)
-        return p1, p1  # same file for both
+                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=60)
+        return p1, p1
 
     mid = dur / 2
     base = os.path.splitext(os.path.basename(mp4_path))[0]
     p1 = os.path.join(out_dir, f"{base}_p1.mp4")
     p2 = os.path.join(out_dir, f"{base}_p2.mp4")
-
     subprocess.run(
         ["ffmpeg", "-y", "-i", mp4_path, "-t", str(mid), "-c", "copy", p1],
-        capture_output=True, timeout=60
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=60
     )
     subprocess.run(
         ["ffmpeg", "-y", "-i", mp4_path, "-ss", str(mid), "-c", "copy", p2],
-        capture_output=True, timeout=60
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=60
     )
     return p1, p2
 
@@ -146,7 +129,6 @@ def deface_part(input_path, output_path, gpu_id):
         r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin\x64",
     ]
     env["PATH"] = os.pathsep.join(cuda_paths) + os.pathsep + env.get("PATH", "")
-
     cmd = [
         DEFACE_CMD, input_path,
         "-k",
@@ -159,7 +141,7 @@ def deface_part(input_path, output_path, gpu_id):
                             stderr=subprocess.STDOUT, universal_newlines=True, bufsize=1)
 
 
-def process_video(video_path, status_callback):
+def process_video(video_path):
     """Process one video with dual GPU pipeline"""
     vname = os.path.basename(video_path)
     parent = os.path.dirname(video_path)
@@ -167,19 +149,16 @@ def process_video(video_path, status_callback):
     output = os.path.join(parent, f"{base_name}_anonymized.mp4")
     start_time = time.time()
 
-    # Step 1: Convert to MP4
-    status_callback("converting", vname, 0)
+    # Convert to MP4
     mp4_path = to_mp4(video_path)
 
-    # Step 2: Split
-    status_callback("splitting", vname, 0)
+    # Split
     p1, p2 = split_video(mp4_path, parent)
     a1 = p1.replace("_p1.mp4", "_a1.mp4")
     a2 = p2.replace("_p2.mp4", "_a2.mp4")
 
     if p1 == p2:
         # Very short video, just single GPU
-        status_callback("processing", vname, 0)
         env = os.environ.copy()
         cuda_paths = [r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin",
                       r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin\x64"]
@@ -192,7 +171,6 @@ def process_video(video_path, status_callback):
         ok = r.returncode == 0
         elapsed = time.time() - start_time
         out_size = os.path.getsize(output) / 1024 / 1024 if os.path.exists(output) else 0
-        # Cleanup
         for f in [p1, mp4_path]:
             if f != video_path:
                 try: os.remove(f)
@@ -200,7 +178,6 @@ def process_video(video_path, status_callback):
         return ok, vname, elapsed, out_size
     else:
         # Dual GPU
-        status_callback("processing", vname, 0)
         proc0 = deface_part(p1, a1, gpu_id=0)
         proc1 = deface_part(p2, a2, gpu_id=1)
 
@@ -209,22 +186,23 @@ def process_video(video_path, status_callback):
             sz0 = os.path.getsize(a1) if os.path.exists(a1) else 0
             sz1 = os.path.getsize(a2) if os.path.exists(a2) else 0
             pct = min(99, int((sz0 + sz1) / max(1, target_mb) * 100))
-            status_callback("processing", vname, pct)
+            bar = "█" * (pct // 5) + "░" * (20 - pct // 5)
+            print(f"\r    [{bar}] {pct}%", end="", flush=True)
             time.sleep(1)
 
+        print()
         rc0, rc1 = proc0.returncode, proc1.returncode
         if rc0 != 0 or rc1 != 0:
             return False, vname, time.time() - start_time, 0
 
         # Merge
-        status_callback("merging", vname, 95)
         list_file = os.path.join(parent, "_merge.txt")
         with open(list_file, "w") as f:
             f.write(f"file '{a1}'\nfile '{a2}'\n")
         subprocess.run(
             ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file,
              "-c", "copy", output],
-            capture_output=True, timeout=60
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=60
         )
 
         # Cleanup
@@ -240,61 +218,9 @@ def process_video(video_path, status_callback):
         return True, vname, elapsed, out_size
 
 
-class StatusManager:
-    def __init__(self, total):
-        self.lock = threading.Lock()
-        self.status = {
-            "running": True, "total": total, "completed": 0, "errors": 0,
-            "pipeline": "CUDA 13 Native · 2×RTX4090 · NVENC",
-            "elapsed": "", "current": None, "history": []
-        }
-        self.start_time = time.time()
-
-    def callback(self, stage, filename, pct):
-        with self.lock:
-            self.status["current"] = {
-                "file": filename, "stage": stage, "pct": pct,
-                "gpu0": pct, "gpu1": pct
-            }
-            self._write()
-
-    def add_result(self, ok, vname, elapsed, size_mb):
-        with self.lock:
-            if ok:
-                self.status["completed"] += 1
-            else:
-                self.status["errors"] += 1
-            self.status["history"].append({
-                "file": vname, "time": round(elapsed, 0),
-                "size_mb": round(size_mb, 1),
-                "status": "OK" if ok else "ERR"
-            })
-            self.status["elapsed"] = str(timedelta(
-                seconds=int(time.time() - self.start_time)
-            ))
-            self._write()
-
-    def finalize(self):
-        with self.lock:
-            self.status["running"] = False
-            self.status["elapsed"] = str(timedelta(
-                seconds=int(time.time() - self.start_time)
-            ))
-            self._write()
-
-    def _write(self):
-        try:
-            os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
-            with open(STATUS_FILE, "w", encoding="utf-8") as f:
-                json.dump(self.status, f, ensure_ascii=False)
-        except:
-            pass
-
-
 def main():
     setup_env()
 
-    # Determine target dirs
     if len(sys.argv) > 1:
         target_dirs = sys.argv[1:]
     else:
@@ -303,7 +229,6 @@ def main():
             r"D:\145videodata"
         ]
 
-    # Scan
     all_videos = []
     for d in target_dirs:
         if os.path.exists(d):
@@ -317,29 +242,32 @@ def main():
         print("No videos found.")
         return
 
-    mgr = StatusManager(len(all_videos))
     print(f"\n[START] {len(all_videos)} videos to process")
     print(f"[GPU] Dual RTX 4090, CUDA 13 native, NVENC")
     print()
+
+    completed = 0
+    errors = 0
+    t0 = time.time()
 
     for i, video_path in enumerate(all_videos):
         vname = os.path.basename(video_path)
         print(f"[{i+1}/{len(all_videos)}] {vname}")
         try:
-            ok, name, elapsed, out_size = process_video(
-                video_path, mgr.callback
-            )
-            mgr.add_result(ok, name, elapsed, out_size)
-            status = "OK" if ok else "FAIL"
-            print(f"  {status} | {elapsed:.0f}s | {out_size:.1f}MB")
+            ok, name, elapsed, out_size = process_video(video_path)
+            if ok:
+                completed += 1
+                print(f"  OK | {elapsed:.0f}s | {out_size:.1f}MB")
+            else:
+                errors += 1
+                print(f"  FAIL | {elapsed:.0f}s")
         except Exception as e:
+            errors += 1
             print(f"  ERROR: {e}")
-            mgr.add_result(False, vname, 0, 0)
 
-    mgr.finalize()
-    elapsed = str(timedelta(seconds=int(time.time() - mgr.start_time)))
-    print(f"\n[DONE] Completed: {mgr.status['completed']}, "
-          f"Errors: {mgr.status['errors']}, Total: {elapsed}")
+    total_time = time.time() - t0
+    elapsed_str = str(timedelta(seconds=int(total_time)))
+    print(f"\n[DONE] Completed: {completed}, Errors: {errors}, Total: {elapsed_str}")
 
 
 if __name__ == "__main__":
