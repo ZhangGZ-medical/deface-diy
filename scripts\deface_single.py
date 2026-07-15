@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Single video deface with CUDA 13 native + NVENC + auto MTS→MP4 conversion.
+Single video deface with CUDA 13 native + NVENC + auto MTS->MP4 conversion.
 Usage:
   python deface_single.py <video_path>
   python deface_single.py "D:\\workspace\\face\\video.MTS"
@@ -50,13 +50,13 @@ def to_mp4(src):
         return dst
     r = subprocess.run(
         ["ffmpeg", "-y", "-i", src, "-c", "copy", "-map", "0:v", "-map", "0:a?", dst],
-        capture_output=True, text=True, timeout=180
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=180
     )
     if r.returncode != 0:
         subprocess.run(
             ["ffmpeg", "-y", "-i", src, "-c:v", "libx264", "-c:a", "aac",
              "-preset", "fast", dst],
-            capture_output=True, text=True, timeout=300
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=300
         )
     return dst
 
@@ -67,7 +67,7 @@ def split_video(mp4_path, out_dir):
         base = os.path.splitext(os.path.basename(mp4_path))[0]
         p1 = os.path.join(out_dir, f"{base}_p1.mp4")
         subprocess.run(["ffmpeg", "-y", "-i", mp4_path, "-c", "copy", p1],
-                       capture_output=True, timeout=60)
+                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=60)
         return p1, p1
 
     mid = dur / 2
@@ -76,11 +76,11 @@ def split_video(mp4_path, out_dir):
     p2 = os.path.join(out_dir, f"{base}_p2.mp4")
     subprocess.run(
         ["ffmpeg", "-y", "-i", mp4_path, "-t", str(mid), "-c", "copy", p1],
-        capture_output=True, timeout=60
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=60
     )
     subprocess.run(
         ["ffmpeg", "-y", "-i", mp4_path, "-ss", str(mid), "-c", "copy", p2],
-        capture_output=True, timeout=60
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=60
     )
     return p1, p2
 
@@ -88,6 +88,11 @@ def split_video(mp4_path, out_dir):
 def deface_part(input_path, output_path, gpu_id):
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    cuda_paths = [
+        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin",
+        r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin\x64",
+    ]
+    env["PATH"] = os.pathsep.join(cuda_paths) + os.pathsep + env.get("PATH", "")
     cmd = [DEFACE_CMD, input_path, "-k", "--backend", BACKEND, "--ep", EP,
            "--ffmpeg-config", FFMPEG_CFG, "-o", output_path]
     return subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE,
@@ -113,13 +118,19 @@ def main():
     output = os.path.join(parent, f"{base_name}_anonymized.mp4")
     t0 = time.time()
 
-    # Convert
+    # Step 1: Convert to MP4
     print(f"[1/4] Convert to MP4: {vname}")
     mp4 = to_mp4(video_path)
 
     if no_dual:
+        # Step 2: Single GPU
         print(f"[2/4] Single GPU deface (CUDA 13)...")
         env = os.environ.copy()
+        cuda_paths = [
+            r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin",
+            r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin\x64",
+        ]
+        env["PATH"] = os.pathsep.join(cuda_paths) + os.pathsep + env.get("PATH", "")
         t1 = time.time()
         r = subprocess.run(
             [DEFACE_CMD, mp4, "-k", "--backend", BACKEND, "--ep", EP,
@@ -131,15 +142,21 @@ def main():
             sys.exit(1)
         elapsed = time.time() - t1
     else:
-        # Split
+        # Step 2: Split
         print(f"[2/4] Split video...")
         p1, p2 = split_video(mp4, parent)
         a1 = p1.replace("_p1.mp4", "_a1.mp4")
         a2 = p2.replace("_p2.mp4", "_a2.mp4")
 
         if p1 == p2:
+            # Short video, single GPU
             print(f"[3/4] Short video, single GPU deface...")
             env = os.environ.copy()
+            cuda_paths = [
+                r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin",
+                r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin\x64",
+            ]
+            env["PATH"] = os.pathsep.join(cuda_paths) + os.pathsep + env.get("PATH", "")
             t1 = time.time()
             r = subprocess.run(
                 [DEFACE_CMD, p1, "-k", "--backend", BACKEND, "--ep", EP,
@@ -150,6 +167,7 @@ def main():
                 sys.exit(1)
             elapsed = time.time() - t1
         else:
+            # Dual GPU processing
             print(f"[3/4] Dual GPU deface (GPU0 + GPU1)...")
             t1 = time.time()
             proc0 = deface_part(p1, a1, 0)
@@ -170,6 +188,7 @@ def main():
                 print("ERROR: deface failed on one or both GPUs")
                 sys.exit(1)
 
+            # Step 4: Merge
             print(f"[4/4] Merging...")
             list_file = os.path.join(parent, "_merge.txt")
             with open(list_file, "w") as f:
@@ -177,15 +196,15 @@ def main():
             subprocess.run(
                 ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file,
                  "-c", "copy", output],
-                capture_output=True, timeout=60
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=60
             )
 
-            # Cleanup
+            # Cleanup temp files
             for f in [p1, p2, a1, a2, list_file]:
                 try: os.remove(f)
                 except: pass
 
-    # Cleanup converted MP4
+    # Cleanup converted MP4 (if different from source)
     if mp4 != video_path:
         try: os.remove(mp4)
         except: pass
