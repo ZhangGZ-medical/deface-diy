@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Single video deface with CUDA 13 native + NVENC + auto MTS→MP4 conversion.
+Single video deface with CUDA 13 native + NVENC + auto MTS->MP4 conversion.
 Usage:
   python deface_single.py <video_path>
   python deface_single.py "D:\\workspace\\face\\video.MTS"
@@ -12,7 +12,6 @@ DEFACE_CMD = r"D:\face_anon_env\Scripts\deface"
 FFMPEG_CFG = '{"codec":"h264_nvenc"}'
 BACKEND = "onnxrt"
 EP = "CUDAExecutionProvider"
-
 
 def setup_env():
     cuda_base = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0"
@@ -29,7 +28,6 @@ def setup_env():
     ])
     os.environ["PATH"] = path_add + os.pathsep + os.environ.get("PATH", "")
 
-
 def get_duration(path):
     try:
         r = subprocess.run(
@@ -40,7 +38,6 @@ def get_duration(path):
         return float(r.stdout.strip() or 0)
     except:
         return 0
-
 
 def to_mp4(src):
     if src.lower().endswith(".mp4"):
@@ -59,7 +56,6 @@ def to_mp4(src):
             capture_output=True, text=True, timeout=300
         )
     return dst
-
 
 def split_video(mp4_path, out_dir):
     dur = get_duration(mp4_path)
@@ -84,7 +80,6 @@ def split_video(mp4_path, out_dir):
     )
     return p1, p2
 
-
 def deface_part(input_path, output_path, gpu_id):
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
@@ -92,7 +87,6 @@ def deface_part(input_path, output_path, gpu_id):
            "--ffmpeg-config", FFMPEG_CFG, "-o", output_path]
     return subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, universal_newlines=True, bufsize=1)
-
 
 def main():
     if len(sys.argv) < 2:
@@ -193,7 +187,6 @@ def main():
     out_size = os.path.getsize(output) / 1024 / 1024
     total_time = time.time() - t0
     print(f"\nDone! {output} ({out_size:.1f}MB, {total_time:.0f}s)")
-
 
 if __name__ == "__main__":
     main()

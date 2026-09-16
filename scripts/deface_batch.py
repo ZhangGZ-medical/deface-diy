@@ -4,7 +4,7 @@ Dual RTX 4090 + CUDA 13 native + NVENC deface batch processor
 =============================================================
 Optimized pipeline:
   1. Scan target dir(s) for video files (mp4/mts/avi/mov/mkv/...)
-  2. Auto-convert non-MP4 → MP4 (stream copy, or re-encode fallback)
+  2. Auto-convert non-MP4 -> MP4 (stream copy, or re-encode fallback)
   3. Split each video into 2 halves
   4. Run deface on both halves in parallel (CUDA EP on GPU0 + GPU1)
   5. Merge anonymized halves back into single MP4
@@ -29,7 +29,6 @@ from datetime import timedelta, datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
-
 # ============= Configuration =============
 PYTHON = r"D:\face_anon_env\Scripts\python.exe"
 DEFACE_CMD = r"D:\face_anon_env\Scripts\deface"
@@ -41,7 +40,6 @@ VIDEO_EXTENSIONS = {".mp4", ".mts", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".we
 
 _env_setup_done = False
 _env_lock = threading.Lock()
-
 
 def setup_env():
     """Ensure CUDA 13 DLLs are findable"""
@@ -65,7 +63,6 @@ def setup_env():
         os.environ["PATH"] = path_add + os.pathsep + os.environ.get("PATH", "")
         _env_setup_done = True
 
-
 def scan_videos(root_dir):
     """Find all video files recursively"""
     videos = []
@@ -74,7 +71,6 @@ def scan_videos(root_dir):
             if os.path.splitext(f)[1].lower() in VIDEO_EXTENSIONS:
                 videos.append(os.path.join(root, f))
     return sorted(videos)
-
 
 def get_duration(path):
     try:
@@ -86,7 +82,6 @@ def get_duration(path):
         return float(r.stdout.strip() or 0)
     except:
         return 0
-
 
 def to_mp4(src):
     """Convert non-MP4 to MP4 (stream copy preferred, re-encode fallback)"""
@@ -108,7 +103,6 @@ def to_mp4(src):
             capture_output=True, text=True, timeout=300
         )
     return dst
-
 
 def split_video(mp4_path, out_dir):
     """Split video into 2 halves for dual GPU"""
@@ -136,7 +130,6 @@ def split_video(mp4_path, out_dir):
     )
     return p1, p2
 
-
 def deface_part(input_path, output_path, gpu_id):
     """Run deface on one part with CUDA EP on specific GPU"""
     env = os.environ.copy()
@@ -157,7 +150,6 @@ def deface_part(input_path, output_path, gpu_id):
     ]
     return subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, universal_newlines=True, bufsize=1)
-
 
 def process_video(video_path, status_callback):
     """Process one video with dual GPU pipeline"""
@@ -239,13 +231,12 @@ def process_video(video_path, status_callback):
         out_size = os.path.getsize(output) / 1024 / 1024 if os.path.exists(output) else 0
         return True, vname, elapsed, out_size
 
-
 class StatusManager:
     def __init__(self, total):
         self.lock = threading.Lock()
         self.status = {
             "running": True, "total": total, "completed": 0, "errors": 0,
-            "pipeline": "CUDA 13 Native · 2×RTX4090 · NVENC",
+            "pipeline": "CUDA 13 Native \u00b7 2\u00d7RTX4090 \u00b7 NVENC",
             "elapsed": "", "current": None, "history": []
         }
         self.start_time = time.time()
@@ -289,7 +280,6 @@ class StatusManager:
                 json.dump(self.status, f, ensure_ascii=False)
         except:
             pass
-
 
 def main():
     setup_env()
@@ -340,7 +330,6 @@ def main():
     elapsed = str(timedelta(seconds=int(time.time() - mgr.start_time)))
     print(f"\n[DONE] Completed: {mgr.status['completed']}, "
           f"Errors: {mgr.status['errors']}, Total: {elapsed}")
-
 
 if __name__ == "__main__":
     main()

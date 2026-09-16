@@ -6,7 +6,6 @@ Deface 环境审查脚本 — 检查本机是否满足医疗视频面部脱敏�
 
 import os, sys, ctypes, shutil, subprocess, json
 
-
 def check_gpu():
     """检查 GPU 和 CUDA"""
     result = {"status": "unknown", "details": []}
@@ -30,7 +29,6 @@ def check_gpu():
         result["status"] = "fail"
         result["summary"] = f"nvidia-smi 不可用 ({e})"
     return result
-
 
 def check_cuda():
     """检查 CUDA Toolkit"""
@@ -66,7 +64,6 @@ def check_cuda():
     result["summary"] = f"CUDA Toolkit: {', '.join(v for v in versions)}"
     return result
 
-
 def check_cudnn():
     """检查 cuDNN — 在 CUDA Toolkit bin 中查找"""
     result = {"status": "unknown", "details": []}
@@ -93,7 +90,6 @@ def check_cudnn():
         result["summary"] = "未找到 cuDNN DLL"
     return result
 
-
 def check_onnxruntime():
     """检查 onnxruntime 及其 provider"""
     result = {"status": "unknown", "details": {}}
@@ -118,11 +114,9 @@ def check_onnxruntime():
         result["summary"] = f"onnxruntime 错误: {e}"
     return result
 
-
 def check_python():
     return {"status": "pass", "summary": f"Python {sys.version.split()[0]}",
             "details": {"version": sys.version.split()[0], "executable": sys.executable}}
-
 
 def check_ffmpeg():
     try:
@@ -139,14 +133,12 @@ def check_ffmpeg():
     except Exception as e:
         return {"status": "fail", "summary": f"FFmpeg 不可用: {e}", "details": {}}
 
-
 def check_disk():
     usage = shutil.disk_usage("C:\\")
     free_gb = usage.free / (1024**3)
     return {"status": "pass" if free_gb > 50 else "warn",
             "summary": f"C: 可用 {free_gb:.0f} GB",
             "details": {"free_gb": round(free_gb, 1), "total_gb": round(usage.total/(1024**3),1)}}
-
 
 def check_ram():
     class MEMORYSTATUSEX(ctypes.Structure):
@@ -166,7 +158,6 @@ def check_ram():
             "summary": f"{total:.0f} GB (可用 {avail:.0f} GB)",
             "details": {"total_gb": round(total,0), "available_gb": round(avail,0)}}
 
-
 def check_deface():
     try:
         import deface
@@ -174,7 +165,6 @@ def check_deface():
         return {"status": "pass", "summary": f"deface {v}", "details": {"version": v}}
     except ImportError:
         return {"status": "warn", "summary": "deface 未安装"}
-
 
 def main():
     checks = {
@@ -208,7 +198,6 @@ def main():
         print("⚠️ 部分检查未通过，请先修复以上 ❌ 项。")
 
     return 0 if all_pass else 1
-
 
 if __name__ == "__main__":
     sys.exit(main())

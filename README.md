@@ -40,7 +40,6 @@ D:\face_anon_env\Scripts\python scripts/deface_single.py video.MTS
 
 # 3. 批量文件夹处理
 D:\face_anon_env\Scripts\python scripts/deface_batch.py D:\videos
-
 ```
 
 ## 文件结构

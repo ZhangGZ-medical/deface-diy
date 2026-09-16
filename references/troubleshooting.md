@@ -25,7 +25,7 @@ ffmpeg -i input.MTS -c copy -map 0:v -map 0:a output.mp4
 
 ### 问题: CUDA EP falls back to CPU
 **现象**: onnxruntime 日志显示 `CUDAExecutionProvider` 回退到 `CPUExecutionProvider`
-**原因**: 
+**原因**:
   1. `cublas64_13.dll` 或 `cublasLt64_13.dll` 缺失
   2. cuDNN DLL 版本不匹配
   3. CUDA Toolkit 版本与 onnxruntime-gpu 版本不兼容

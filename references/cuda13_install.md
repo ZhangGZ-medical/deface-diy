@@ -13,7 +13,7 @@
 
 ### 1. NVIDIA 驱动
 
-确保驱动版本 ≥ 610.x（for CUDA 13）：
+确保驱动版本 >= 610.x（for CUDA 13）：
 
 ```powershell
 nvidia-smi
@@ -25,7 +25,7 @@ nvidia-smi
 
 ```powershell
 # 下载: https://developer.nvidia.com/cuda-downloads
-# 选择: Windows → x86_64 → 13.0 → exe(local)
+# 选择: Windows -> x86_64 -> 13.0 -> exe(local)
 # 安装后验证:
 nvcc --version     # 应显示 V13.0.48
 ```
@@ -34,11 +34,11 @@ nvcc --version     # 应显示 V13.0.48
 
 ```powershell
 # 下载: https://developer.nvidia.com/cudnn-downloads
-# 选择: Windows → x86_64 → CUDA 13 → zip
+# 选择: Windows -> x86_64 -> CUDA 13 -> zip
 # 解压后复制到 CUDA Toolkit 目录:
-# bin/*.dll → C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin\
-# include/* → C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\
-# lib/*     → C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\lib\
+# bin/*.dll -> C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin\
+# include/* -> C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\
+# lib/*     -> C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\lib\
 ```
 
 ### 4. Python 虚拟环境
@@ -79,9 +79,9 @@ D:\face_anon_env\Scripts\python scripts\audit_env.py
 ## 版本兼容矩阵
 
 ```
-Driver 610.x  ──▶  CUDA 13.0  ──▶  cuDNN 9.24
-                                        │
-                                        ▼
+Driver 610.x  --->  CUDA 13.0  --->  cuDNN 9.24
+                                        |
+                                        v
                               onnxruntime-gpu 1.27.0
                                     CUDA EP ✅
 ```
